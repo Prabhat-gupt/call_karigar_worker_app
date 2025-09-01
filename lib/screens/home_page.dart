@@ -7,6 +7,7 @@ import '../all temporary data/upcoming_details.dart';
 import '../screens/all_jobs.dart';
 import '../all temporary data/dummy_bookings.dart';
 import '../screens/add_service_page.dart';
+import '../screens/categories_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -69,22 +70,12 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: const Icon(Icons.add_circle_outline, color: Colors.white),
             onPressed: () {
-              // Check if the worker ID is loaded before navigating
-              if (_workerId != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AddServicePage(workerId: _workerId!),
-                  ),
-                );
-              } else {
-                // Show a message if the ID is not available yet
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Worker ID is not loaded yet. Please wait.'),
-                  ),
-                );
-              }
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CategoriesPage(),
+                ),
+              );
             },
             tooltip: 'Add a new service',
           ),
