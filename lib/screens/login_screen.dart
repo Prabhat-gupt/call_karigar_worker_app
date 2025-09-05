@@ -13,34 +13,35 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _identifierController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
 
   bool _isLoading = false;
 
   Future<void> _login() async {
-    final email = _emailController.text.trim();
+    final identifier = _identifierController.text.trim();
     final password = _passwordController.text;
 
-    if (email.isEmpty || password.isEmpty) {
-      _showError("Please enter both email/phone and password.");
-      return;
-    }
+    if (identifier.isEmpty || password.isEmpty) {
+  _showError("Please enter email/phone and password.");
+  return;
+}
 
     setState(() => _isLoading = true);
 
-    // ✅ Use the deployed API URL
-    final url = Uri.parse("https://callkaarigar.onrender.com/api/users/login");
+    //  Use the deployed API URL
+    final url = Uri.parse("https://call-karigar-backend.onrender.com/api/auth/login");
 
     try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': _emailController.text.trim(),
-          'password': _passwordController.text.trim(),
-        }),
-      );
+     final response = await http.post(
+  url,
+  headers: {'Content-Type': 'application/json'},
+  body: jsonEncode({
+    'identifier': identifier,
+    'password': password,
+  }),
+);
 
       final responseData = jsonDecode(response.body);
       print("response data $responseData");
@@ -94,11 +95,11 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
   @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
+void dispose() {
+  _identifierController.dispose();
+  _passwordController.dispose();
+  super.dispose();
+}
 
   @override
   Widget build(BuildContext context) {
@@ -152,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 32),
 
                 // Email / Phone
-                _buildInputField(Icons.email, 'Email or Phone', controller: _emailController),
+                _buildInputField(Icons.email, 'Email or Phone', controller: _identifierController),
                 const SizedBox(height: 16),
 
                 // Password
