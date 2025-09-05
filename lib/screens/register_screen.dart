@@ -29,6 +29,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  String? _selectedRole = "worker";  // Default role is worker
   Future<void> _register() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
@@ -48,13 +49,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (password.length < 6) {
       return _showError("Password should be at least 6 characters.");
     }
-    if (_selectedRole == null) {
-      return _showError("Please select a role.");
-    }
 
     setState(() => _isLoading = true);
 
-    final url = Uri.parse("https://callkaarigar.onrender.com/api/users/register");
+    final url = Uri.parse("https://call-karigar-backend.onrender.com/api/auth/register");
 
     try {
       final response = await http.post(
