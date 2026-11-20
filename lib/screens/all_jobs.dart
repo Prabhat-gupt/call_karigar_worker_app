@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../all temporary data/upcoming_details.dart';
-import '../all temporary data/dummy_bookings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 
 class AllJobsPage extends StatefulWidget {
   const AllJobsPage({super.key});
@@ -11,42 +12,68 @@ class AllJobsPage extends StatefulWidget {
 
 class _AllJobsPageState extends State<AllJobsPage> {
   String selectedFilter = 'All';
-
-  final List<Map<String, dynamic>> jobs = [
-    {
-      'status': 'Active',
-      'service': 'Electrical Wiring',
-      'description': 'New power outlet installation',
-      'location': 'Gwalior, MP',
-      'time': '1 hour ago',
-      'price': '₹1200',
-    },
-    {
-      'status': 'Completed',
-      'service': 'Fan Repair',
-      'description': 'Ceiling fan motor replacement',
-      'location': 'Ujjain, MP',
-      'time': 'Completed Yesterday',
-      'price': '₹700',
-    },
-  ];
-
-  late List<Map<String, dynamic>> allJobs;
+  List<Map<String, dynamic>> allJobs = [];
+  bool isLoading = true;
+  bool _isVerified = false;
 
   @override
   void initState() {
     super.initState();
-    allJobs = [
-      ...jobs,
-      ...upcomingBookings.map((booking) => {
-        'status': booking['status'] ?? 'Upcoming',
-        'service': booking['service'],
-        'description': booking['description'],
-        'location': booking['location'],
-        'time': booking['time'],
-        'price': booking['price'] != null ? '₹${booking['price']}' : '₹0',
-      }),
-    ];
+    _checkVerificationStatus();
+    _loadJobs();
+  }
+
+  Future<void> _checkVerificationStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString("token");
+
+    if (token != null) {
+      try {
+        // Check both profile and document verification status
+        bool profileVerified = false;
+        bool documentVerified = false;
+
+        // Check worker profile
+        final profileResponse = await ApiService.getWorkerProfile(token);
+        if (profileResponse['isVerified'] != null &&
+            profileResponse['isVerified'] is bool) {
+          profileVerified = profileResponse['isVerified'];
+        } else if (profileResponse['data'] is Map &&
+            profileResponse['data']['isVerified'] != null) {
+          profileVerified = profileResponse['data']['isVerified'] == true;
+        } else if (profileResponse['data'] is List &&
+            profileResponse['data'].isNotEmpty) {
+          final first = profileResponse['data'][0];
+          if (first is Map && first['isVerified'] != null)
+            profileVerified = first['isVerified'] == true;
+        }
+
+        // Check document verification status
+        final docResponse = await ApiService.getWorkerDocuments(token);
+        if (docResponse['error'] == null) {
+          final documentData = docResponse['data'];
+          if (documentData is Map && documentData['status'] != null) {
+            documentVerified = documentData['status'] == 'verified';
+          }
+        }
+
+        setState(() {
+          // Worker must be verified in both profile AND documents
+          _isVerified = profileVerified && documentVerified;
+        });
+      } catch (e) {
+        print('Error checking verification status: $e');
+      }
+    }
+  }
+
+  Future<void> _loadJobs() async {
+    // TODO: Implement API call to fetch jobs from backend
+    // For now, this will remain empty until backend integration is done
+    setState(() {
+      isLoading = false;
+      allJobs = [];
+    });
   }
 
   void _updateStatus(int index, String status) {
@@ -57,6 +84,85 @@ class _AllJobsPageState extends State<AllJobsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Show locked screen if not verified
+    if (!_isVerified) {
+      return Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.white, Color(0xFFFFF3E0)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  size: 80,
+                  color: Colors.orange.shade600,
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Account Not Verified',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 30),
+                  child: Text(
+                    'Your account is pending admin verification. Once your documents are approved, you\'ll be able to view and accept jobs.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 30),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _checkVerificationStatus,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text('Go Back'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange.shade600,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final filteredJobs = selectedFilter == 'All'
         ? allJobs
         : allJobs.where((job) => job['status'] == selectedFilter).toList();
@@ -89,11 +195,23 @@ class _AllJobsPageState extends State<AllJobsPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildCountBox('8', 'Active', Colors.orange.shade100, Colors.orange),
+                  _buildCountBox(
+                      '${allJobs.where((j) => j['status'] == 'Active').length}',
+                      'Active',
+                      Colors.orange.shade100,
+                      Colors.orange),
                   const SizedBox(width: 6),
-                  _buildCountBox('${upcomingBookings.length}', 'Upcoming', Colors.blue.shade100, Colors.blue),
+                  _buildCountBox(
+                      '${allJobs.where((j) => j['status'] == 'Upcoming').length}',
+                      'Upcoming',
+                      Colors.blue.shade100,
+                      Colors.blue),
                   const SizedBox(width: 6),
-                  _buildCountBox('25', 'Completed', Colors.green.shade100, Colors.green),
+                  _buildCountBox(
+                      '${allJobs.where((j) => j['status'] == 'Completed').length}',
+                      'Completed',
+                      Colors.green.shade100,
+                      Colors.green),
                 ],
               ),
             ),
@@ -102,17 +220,26 @@ class _AllJobsPageState extends State<AllJobsPage> {
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: ['All', 'Active', 'Upcoming', 'Completed', 'Accepted', 'Rejected']
-                      .map((filter) {
+                  children: [
+                    'All',
+                    'Active',
+                    'Upcoming',
+                    'Completed',
+                    'Accepted',
+                    'Rejected'
+                  ].map((filter) {
                     bool isSelected = selectedFilter == filter;
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: GestureDetector(
                         onTap: () => setState(() => selectedFilter = filter),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFFFF7043) : Colors.transparent,
+                            color: isSelected
+                                ? const Color(0xFFFF7043)
+                                : Colors.transparent,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: Colors.grey.shade400),
                           ),
@@ -133,15 +260,25 @@ class _AllJobsPageState extends State<AllJobsPage> {
             ),
             const SizedBox(height: 10),
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                itemCount: filteredJobs.length,
-                itemBuilder: (context, index) {
-                  final job = filteredJobs[index];
-                  int realIndex = allJobs.indexOf(job);
-                  return _buildJobCard(job, realIndex);
-                },
-              ),
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : allJobs.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No jobs available',
+                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 0),
+                          itemCount: filteredJobs.length,
+                          itemBuilder: (context, index) {
+                            final job = filteredJobs[index];
+                            int realIndex = allJobs.indexOf(job);
+                            return _buildJobCard(job, realIndex);
+                          },
+                        ),
             ),
           ],
         ),
@@ -149,7 +286,8 @@ class _AllJobsPageState extends State<AllJobsPage> {
     );
   }
 
-  Widget _buildCountBox(String count, String label, Color bgColor, Color textColor) {
+  Widget _buildCountBox(
+      String count, String label, Color bgColor, Color textColor) {
     return Container(
       width: 90,
       height: 70,
@@ -160,7 +298,9 @@ class _AllJobsPageState extends State<AllJobsPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(count, style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(count,
+              style: TextStyle(
+                  color: textColor, fontSize: 20, fontWeight: FontWeight.bold)),
           Text(label, style: TextStyle(color: textColor, fontSize: 14)),
         ],
       ),
@@ -211,26 +351,30 @@ class _AllJobsPageState extends State<AllJobsPage> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: statusColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   status,
-                  style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                      color: statusColor, fontWeight: FontWeight.w600),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   job['service'],
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
               Text(
                 job['price'],
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ],
           ),
@@ -257,7 +401,8 @@ class _AllJobsPageState extends State<AllJobsPage> {
                   context: context,
                   isScrollControlled: true,
                   shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                   builder: (_) {
                     return UpcomingDetailsSheet(
@@ -317,7 +462,9 @@ class UpcomingDetailsSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(service, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          Text(service,
+              style:
+                  const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           Text("Customer: $customer"),
           Text("Date & Time: $time"),
@@ -335,7 +482,8 @@ class UpcomingDetailsSheet extends StatelessWidget {
                 width: MediaQuery.of(context).size.width * 0.4,
                 child: ElevatedButton(
                   onPressed: () => onAction?.call('Accepted'),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  style:
+                      ElevatedButton.styleFrom(backgroundColor: Colors.green),
                   child: const Text("Accept"),
                 ),
               ),

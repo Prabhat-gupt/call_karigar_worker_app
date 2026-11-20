@@ -17,7 +17,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  String? _selectedRole; // Role dropdown value
+  String? _selectedRole = "worker"; // Role dropdown value (default: worker)
   bool _isLoading = false;
 
   @override
@@ -29,7 +29,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  String? _selectedRole = "worker";  // Default role is worker
   Future<void> _register() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
@@ -52,7 +51,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _isLoading = true);
 
-    final url = Uri.parse("https://call-karigar-backend.onrender.com/api/auth/register");
+    final url = Uri.parse(
+        "https://call-karigar-backend.onrender.com/api/auth/register");
 
     try {
       final response = await http.post(
@@ -81,7 +81,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const LoginScreen()),
-              (Route<dynamic> route) => false,
+          (Route<dynamic> route) => false,
         );
       } else {
         _showError(responseData['message'] ?? "Registration failed");
@@ -167,7 +167,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Image.asset('assets/mp_logo.png', height: 100),
                 const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(50),
@@ -200,13 +201,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                _buildInputField(Icons.person, 'Full Name', controller: _nameController),
+                _buildInputField(Icons.person, 'Full Name',
+                    controller: _nameController),
                 const SizedBox(height: 16),
-                _buildInputField(Icons.email, 'Email', controller: _emailController),
+                _buildInputField(Icons.email, 'Email',
+                    controller: _emailController),
                 const SizedBox(height: 16),
-                _buildInputField(Icons.phone, 'Phone Number', controller: _phoneController),
+                _buildInputField(Icons.phone, 'Phone Number',
+                    controller: _phoneController),
                 const SizedBox(height: 16),
-                _buildInputField(Icons.lock, 'Password', isPassword: true, controller: _passwordController),
+                _buildInputField(Icons.lock, 'Password',
+                    isPassword: true, controller: _passwordController),
                 const SizedBox(height: 16),
                 _buildRoleDropdown(), // ✅ Role dropdown
                 const SizedBox(height: 24),
@@ -223,8 +228,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                     child: _isLoading
-                        ? const CircularProgressIndicator(color: Colors.deepPurple)
-                        : const Text('REGISTER', style: TextStyle(fontSize: 16)),
+                        ? const CircularProgressIndicator(
+                            color: Colors.deepPurple)
+                        : const Text('REGISTER',
+                            style: TextStyle(fontSize: 16)),
                   ),
                 ),
                 const SizedBox(height: 16),

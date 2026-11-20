@@ -16,7 +16,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _identifierController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-
   bool _isLoading = false;
 
   Future<void> _login() async {
@@ -24,36 +23,39 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text;
 
     if (identifier.isEmpty || password.isEmpty) {
-  _showError("Please enter email/phone and password.");
-  return;
-}
+      _showError("Please enter email/phone and password.");
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     //  Use the deployed API URL
-    final url = Uri.parse("https://call-karigar-backend.onrender.com/api/auth/login");
+    final url = Uri.parse("http://localhost:5000/api/auth/login");
 
     try {
-     final response = await http.post(
-  url,
-  headers: {'Content-Type': 'application/json'},
-  body: jsonEncode({
-    'identifier': identifier,
-    'password': password,
-  }),
-);
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'identifier': identifier,
+          'password': password,
+        }),
+      );
 
       final responseData = jsonDecode(response.body);
       print("response data $responseData");
 
-      if (response.statusCode == 200 ) {
-
-        final token = responseData['token'];
-        final user = responseData['user'];
-        final workerId = user != null ? user['_id'] : null;
+      if (response.statusCode == 200) {
+        // Extract data from nested 'data' object
+        final data = responseData['data'];
+        final token = data['token'];
+        final user = data['user'];
+        final workerId = user != null ? user['id'] : null;
+        final redirectTo = data['redirectTo'];
 
         print("✅ Login successful. JWT Token: $token");
         print("✅ Worker ID: $workerId");
+        print("✅ Redirect to: $redirectTo");
 
         if (workerId == null) {
           _showError("User ID not found in response.");
@@ -71,13 +73,21 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         await Future.delayed(const Duration(seconds: 1));
 
-        print("Navigating to LandingPage...");
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const LandingPage()),
-        );
-
-
+        // Navigate to the appropriate page
+        if (redirectTo != null && redirectTo.isNotEmpty) {
+          print("Navigating to: $redirectTo");
+          // For now, navigate to LandingPage; you can implement specific routing logic here if needed
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LandingPage()),
+          );
+        } else {
+          print("Navigating to LandingPage...");
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LandingPage()),
+          );
+        }
       } else {
         print("❌ Login failed. Response: ${response.body}");
         _showError(responseData['message'] ?? "Login failed");
@@ -94,12 +104,13 @@ class _LoginScreenState extends State<LoginScreen> {
       SnackBar(content: Text(message)),
     );
   }
+
   @override
-void dispose() {
-  _identifierController.dispose();
-  _passwordController.dispose();
-  super.dispose();
-}
+  void dispose() {
+    _identifierController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +131,8 @@ void dispose() {
                 Image.asset('assets/mp_logo.png', height: 100),
                 const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(50),
@@ -146,25 +158,32 @@ void dispose() {
                 const SizedBox(height: 32),
                 const Text(
                   'Welcome Back',
-                  style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
-                const Text('Login to your account', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                const Text('Login to your account',
+                    style: TextStyle(color: Colors.white70, fontSize: 16)),
                 const SizedBox(height: 32),
 
                 // Email / Phone
-                _buildInputField(Icons.email, 'Email or Phone', controller: _identifierController),
+                _buildInputField(Icons.email, 'Email or Phone',
+                    controller: _identifierController),
                 const SizedBox(height: 16),
 
                 // Password
-                _buildInputField(Icons.lock, 'Password', isPassword: true, controller: _passwordController),
+                _buildInputField(Icons.lock, 'Password',
+                    isPassword: true, controller: _passwordController),
                 const SizedBox(height: 10),
 
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {},
-                    child: const Text("Forgot Password?", style: TextStyle(color: Colors.white70)),
+                    child: const Text("Forgot Password?",
+                        style: TextStyle(color: Colors.white70)),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -183,7 +202,8 @@ void dispose() {
                       ),
                     ),
                     child: _isLoading
-                        ? const CircularProgressIndicator(color: Colors.deepPurple)
+                        ? const CircularProgressIndicator(
+                            color: Colors.deepPurple)
                         : const Text('LOGIN', style: TextStyle(fontSize: 16)),
                   ),
                 ),
@@ -195,8 +215,8 @@ void dispose() {
                       context,
                       MaterialPageRoute(builder: (_) => const RegisterScreen()),
                     ).then((_) {
-                      // Clears email and password fields when coming back from Register screen
-                      _emailController.clear();
+                      // Clears identifier and password fields when coming back from Register screen
+                      _identifierController.clear();
                       _passwordController.clear();
                     });
                   },
@@ -207,7 +227,6 @@ void dispose() {
                 ),
 
                 const SizedBox(height: 12),
-
               ],
             ),
           ),
@@ -217,11 +236,11 @@ void dispose() {
   }
 
   Widget _buildInputField(
-      IconData icon,
-      String hint, {
-        bool isPassword = false,
-        required TextEditingController controller,
-      }) {
+    IconData icon,
+    String hint, {
+    bool isPassword = false,
+    required TextEditingController controller,
+  }) {
     return TextField(
       controller: controller,
       obscureText: isPassword,

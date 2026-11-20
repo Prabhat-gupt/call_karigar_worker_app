@@ -3,7 +3,13 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class WorkerServicesApi {
-  static const String baseUrl = "https://callkaarigar.onrender.com/api/worker-services";
+  // ⚠️ CHANGE THIS TO YOUR LOCAL MACHINE IP OR PRODUCTION URL
+  // For emulator: http://10.0.2.2:5000 (Android) or http://127.0.0.1:5000 (iOS)
+  // For physical device: http://YOUR_MACHINE_IP:5000 (e.g., http://192.168.x.x:5000)
+  // For production: https://callkaarigar.onrender.com
+  static const String apiHost = 'http://localhost:5000'; // Change this!
+
+  static const String baseUrl = "$apiHost/api/worker-services";
 
   /// GET: Fetch all services for a specific worker
   static Future<List<dynamic>> getWorkerServices() async {
@@ -38,6 +44,9 @@ class WorkerServicesApi {
 
   /// POST: Add a new service for a worker
   static Future<bool> addWorkerService(Map<String, dynamic> serviceData) async {
+    print(
+        'DEBUG: addWorkerService called with data: ${jsonEncode(serviceData)}');
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
@@ -47,10 +56,25 @@ class WorkerServicesApi {
         throw Exception("Token or Worker ID not found in storage");
       }
 
-      // Ensure workerId is part of the request
-      serviceData['workerId'] = workerId;
+      print('DEBUG: addWorkerService - Token: ${token.substring(0, 20)}...');
+      print('DEBUG: addWorkerService - WorkerId: $workerId');
+      print(
+          'DEBUG: addWorkerService - Request body before normalization: ${jsonEncode(serviceData)}');
+
+      // Normalize price to a number when possible (backend expects numeric comparison)
+      if (serviceData.containsKey('price')) {
+        final raw = serviceData['price'];
+        if (raw is String) {
+          final parsed = double.tryParse(raw.replaceAll(',', '').trim());
+          if (parsed != null) serviceData['price'] = parsed;
+        }
+      }
+
+      print(
+          'DEBUG: addWorkerService - Request body after normalization: ${jsonEncode(serviceData)}');
 
       final url = Uri.parse(baseUrl);
+      print('DEBUG: addWorkerService - Posting to: $url');
       final response = await http.post(
         url,
         headers: {
@@ -60,13 +84,20 @@ class WorkerServicesApi {
         body: jsonEncode(serviceData),
       );
 
+      print(
+          'DEBUG: addWorkerService - Response status: ${response.statusCode}');
+      print('DEBUG: addWorkerService - Response body: ${response.body}');
+
       if (response.statusCode == 201) {
+        print('DEBUG: addWorkerService - SUCCESS');
         return true;
       } else {
-        print("Error response: ${response.body}");
+        print(
+            "DEBUG: addWorkerService failed (${response.statusCode}): ${response.body}");
         return false;
       }
     } catch (e) {
+      print('DEBUG: addWorkerService - Exception: $e');
       throw Exception("Error adding service: $e");
     }
   }

@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+import '../screens/api_service.dart';
+import 'documents_api.dart';
 
 class DocumentVerificationPage extends StatefulWidget {
-  const DocumentVerificationPage({super.key});
+  final VoidCallback? onDocumentsUploaded;
+
+  const DocumentVerificationPage({
+    super.key,
+    this.onDocumentsUploaded,
+  });
 
   @override
   State<DocumentVerificationPage> createState() =>
@@ -10,11 +19,11 @@ class DocumentVerificationPage extends StatefulWidget {
 }
 
 class _DocumentVerificationPageState extends State<DocumentVerificationPage> {
-  String? aadhaarFile;
-  String? photoFile;
-  String? panFile;
-  String? ITIFile;
-  String? PoliceFile;
+  PlatformFile? aadhaarFile;
+  PlatformFile? photoFile;
+  PlatformFile? panFile;
+  PlatformFile? ITIFile;
+  PlatformFile? PoliceFile;
 
   Future<void> pickDocument(String type) async {
     final result = await FilePicker.platform.pickFiles();
@@ -23,24 +32,22 @@ class _DocumentVerificationPageState extends State<DocumentVerificationPage> {
       setState(() {
         switch (type) {
           case 'aadhaar':
-            aadhaarFile = result.files.single.name;
+            aadhaarFile = result.files.single;
             break;
           case 'photo':
-            photoFile = result.files.single.name;
+            photoFile = result.files.single;
             break;
           case 'pan':
-            panFile = result.files.single.name;
+            panFile = result.files.single;
             break;
           case 'ITI':
-            ITIFile = result.files.single.name;
+            ITIFile = result.files.single;
             break;
           case 'Police':
-            PoliceFile = result.files.single.name;
+            PoliceFile = result.files.single;
             break;
         }
       });
-
-      // Upload to server using: result.files.single.path
     }
   }
 
@@ -66,13 +73,13 @@ class _DocumentVerificationPageState extends State<DocumentVerificationPage> {
     });
   }
 
-  void submitDocuments() {
-    if (aadhaarFile == null || photoFile == null || panFile == null || ITIFile == null || PoliceFile ==null ) {
+  Future<void> submitDocuments() async {
+    if (aadhaarFile == null || photoFile == null || panFile == null) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text("Incomplete Upload"),
-          content: const Text("Please upload all required documents."),
+          content: const Text("Please upload Aadhaar, Photo, and PAN Card."),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -81,18 +88,108 @@ class _DocumentVerificationPageState extends State<DocumentVerificationPage> {
           ],
         ),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Documents submitted successfully!")),
+      return;
+    }
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString("token");
+      String? workerId = prefs.getString("workerId");
+
+      if (token == null || workerId == null) {
+        Navigator.pop(context); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("Authentication failed. Please login again.")),
+        );
+        return;
+      }
+
+      // Prepare file paths
+      final filePaths = {
+        'aadhar': aadhaarFile!.path ?? '',
+        'pan': panFile!.path ?? '',
+        'policeVerification':
+            photoFile!.path ?? '', // Using photo as police verification
+      };
+
+      if (kDebugMode) {
+        print("📤 Uploading documents:");
+        print("   Aadhar: ${aadhaarFile!.name}");
+        print("   PAN: ${panFile!.name}");
+        print("   Police Verification: ${photoFile!.name}");
+        if (ITIFile != null) print("   ITI: ${ITIFile!.name}");
+      }
+
+      // Upload documents using the API
+      final response = await ApiService.uploadDocuments(
+        token,
+        filePaths,
+        certificationTitles: ITIFile != null ? ['ITI Certification'] : null,
       );
-      Navigator.pop(context, true);  // <--- This is important
+
+      Navigator.pop(context); // Close loading dialog
+
+      if (response['error'] == null && response['success'] == true) {
+        if (kDebugMode) {
+          print("✅ Documents uploaded successfully");
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Documents uploaded successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Close verification page and return to profile
+        if (mounted) {
+          Navigator.pop(context);
+          if (widget.onDocumentsUploaded != null) {
+            widget.onDocumentsUploaded!();
+          }
+        }
+      } else {
+        if (kDebugMode) {
+          print("❌ Upload failed: ${response['message']}");
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['message'] ?? "Failed to upload documents"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+
+      if (kDebugMode) {
+        print("❌ Error submitting documents: $e");
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error submitting documents: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   Widget documentUploadTile({
     required String title,
     required String type,
-    required String? fileName,
+    required PlatformFile? file,
     required VoidCallback onUpload,
   }) {
     return Column(
@@ -103,13 +200,13 @@ class _DocumentVerificationPageState extends State<DocumentVerificationPage> {
           icon: const Icon(Icons.upload_file),
           label: Text("Upload $title"),
         ),
-        if (fileName != null)
+        if (file != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 5),
             child: Row(
               children: [
                 Expanded(
-                  child: Text("Selected: $fileName",
+                  child: Text("Selected: ${file.name}",
                       style: const TextStyle(fontSize: 14)),
                 ),
                 IconButton(
@@ -149,32 +246,20 @@ class _DocumentVerificationPageState extends State<DocumentVerificationPage> {
               documentUploadTile(
                 title: "Aadhaar Card",
                 type: "aadhaar",
-                fileName: aadhaarFile,
+                file: aadhaarFile,
                 onUpload: () => pickDocument('aadhaar'),
               ),
               documentUploadTile(
                 title: "Photo",
                 type: "photo",
-                fileName: photoFile,
+                file: photoFile,
                 onUpload: () => pickDocument('photo'),
               ),
               documentUploadTile(
                 title: "PAN Card",
                 type: "pan",
-                fileName: panFile,
+                file: panFile,
                 onUpload: () => pickDocument('pan'),
-              ),
-              documentUploadTile(
-                title: "ITI Certificate",
-                type: "ITI",
-                fileName: ITIFile,
-                onUpload: () => pickDocument('ITI'),
-              ),
-              documentUploadTile(
-                title: "Police Verification Card",
-                type: "Police",
-                fileName: PoliceFile,
-                onUpload: () => pickDocument('Police'),
               ),
               const Spacer(),
               SizedBox(
